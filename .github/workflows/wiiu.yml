@@ -53,8 +53,10 @@ jobs:
         run: |
           f=ci-build.log
           [ -f "$f" ] || exit 0
-          { grep -n -B3 -A8 -E "error|Error |FAILED|undefined reference|multiple definition" "$f" | head -150
-            echo "----- tail -----"; tail -40 "$f"; } > ci-excerpt.txt || true
+          # Long command lines would use up the annotation, so cut them.
+          cut -c1-400 "$f" | grep -v "^\[[0-9]*/[0-9]*\] Building" > ci-short.log || true
+          { grep -n -B2 -A12 -E "error|Error |FAILED|undefined reference|multiple definition" ci-short.log | head -150
+            echo "----- tail -----"; tail -40 ci-short.log; } > ci-excerpt.txt || true
           msg=$(sed -e 's/%/%25/g' -e 's/\r/%0D/g' ci-excerpt.txt | awk 'BEGIN{ORS="%0A"} {print}')
           echo "::error title=$f::$msg"
 
