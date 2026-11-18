@@ -2678,8 +2678,14 @@ IN_Controller_Init(qboolean notify_user)
 #ifdef SDL_HINT_JOYSTICK_HIDAPI_PS5_RUMBLE
 		SDL_SetHint( SDL_HINT_JOYSTICK_HIDAPI_PS5_RUMBLE, "1" );
 #endif
-#ifdef SDL_HINT_GAMECONTROLLER_USE_BUTTON_LABELS	// use button positions instead of labels, like SDL3
+#ifdef SDL_HINT_GAMECONTROLLER_USE_BUTTON_LABELS
+#ifdef __WIIU__
+		// Use the Nintendo labels: A (right) confirms in the menus, B goes back
+		SDL_SetHint( SDL_HINT_GAMECONTROLLER_USE_BUTTON_LABELS, "1" );
+#else
+		// use button positions instead of labels, like SDL3
 		SDL_SetHint( SDL_HINT_GAMECONTROLLER_USE_BUTTON_LABELS, "0" );
+#endif
 #endif
 
 #ifdef __WIIU__

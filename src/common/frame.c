@@ -228,6 +228,25 @@ void Qcommon_ExecConfigs(qboolean gameStartUp)
 {
 	Cbuf_AddText("exec default.cfg\n");
 	Cbuf_AddText("exec yq2.cfg\n");
+#ifdef __WIIU__
+	/* default.cfg only binds the keyboard. The saved config.cfg
+	   comes after, so the player's own bindings win. */
+	Cbuf_AddText(
+		"bind TRIG_RIGHT +attack\n"
+		"bind TRIG_LEFT +moveup\n"
+		"bind BTN_SOUTH +moveup\n"
+		"bind BTN_EAST +movedown\n"
+		"bind BTN_WEST inven\n"
+		"bind BTN_NORTH invuse\n"
+		"bind SHOULDR_RIGHT weapnext\n"
+		"bind SHOULDR_LEFT weapprev\n"
+		"bind DP_LEFT invprev\n"
+		"bind DP_RIGHT invnext\n"
+		"bind DP_UP \"cmd help\"\n"
+		"bind DP_DOWN invdrop\n"
+		"bind BTN_BACK \"cmd help\"\n"
+		"bind STICK_RIGHT centerview\n");
+#endif
 	Cbuf_AddText("exec config.cfg\n");
 	Cbuf_AddText("exec autoexec.cfg\n");
 

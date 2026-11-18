@@ -26,8 +26,25 @@ Configs, savegames and screenshots are written to
 ## Controls
 
 The GamePad and Pro Controllers work through SDL's game controller
-support, with Yamagi Quake II's default gamepad bindings. The image is
-shown on the TV and mirrored to the GamePad.
+support. The image is shown on the TV and mirrored to the GamePad.
+
+| Button | Action |
+|---|---|
+| Left stick / right stick | move / look |
+| ZR | fire |
+| ZL or A | jump |
+| B | crouch |
+| R / L | next / previous weapon |
+| X | inventory |
+| Y | use item |
+| D-pad left / right | previous / next item |
+| D-pad down | drop item |
+| D-pad up or − | help computer |
+| Right stick click | center view |
+| + | menu |
+
+In the menus, A confirms and B goes back. Change the bindings in
+Options → Gamepad, they are saved to `config.cfg`.
 
 ## Not supported yet
 
