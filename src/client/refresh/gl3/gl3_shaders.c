@@ -38,6 +38,16 @@ CompileShader(GLenum shaderType, const char* shaderSrc, const char* shaderSrc2)
 
 #ifdef YQ2_GL3_GLES3
 	const char* version = "#version 300 es\nprecision highp float;\n";
+#elif defined(__WIIU__)
+	/* gx2gl's shader compiler (CafeGLSL) only computes the first
+	   component of a vector pow(): the others came out 0, so everything
+	   drawn with gamma was red. Do it one component at a time. */
+	const char* version = "#version 150\n"
+		"float q2pow(float b, float e) { return pow(b, e); }\n"
+		"vec2 q2pow(vec2 b, vec2 e) { return vec2(pow(b.x, e.x), pow(b.y, e.y)); }\n"
+		"vec3 q2pow(vec3 b, vec3 e) { return vec3(pow(b.x, e.x), pow(b.y, e.y), pow(b.z, e.z)); }\n"
+		"vec4 q2pow(vec4 b, vec4 e) { return vec4(pow(b.x, e.x), pow(b.y, e.y), pow(b.z, e.z), pow(b.w, e.w)); }\n"
+		"#define pow q2pow\n";
 #else // Desktop GL
 	const char* version = "#version 150\n";
 #endif
