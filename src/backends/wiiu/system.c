@@ -71,8 +71,8 @@ Sys_WiiU_OpenLog(const char *path)
 	wiiu_log = fopen(path, "w");
 }
 
-static void
-WiiU_Log(const char *string)
+void
+Sys_WiiU_LogRaw(const char *string)
 {
 	WHBLogWrite(string);
 
@@ -90,6 +90,8 @@ WiiU_Log(const char *string)
 static YQ2_ATTR_NORETURN void
 WiiU_Exit(int status)
 {
+	Sys_WiiU_PauseWatchdog(1);
+
 	if (!wiiu_leaving_foreground)
 	{
 		SYSLaunchMenu();
@@ -123,7 +125,14 @@ WiiU_Exit(int status)
 void
 Sys_WiiU_Frame(void)
 {
-	if (!WHBProcIsRunning())
+	Sys_WiiU_Heartbeat();
+
+	/* WHBProcIsRunning() blocks while the HOME menu is open. */
+	Sys_WiiU_PauseWatchdog(1);
+	int running = WHBProcIsRunning();
+	Sys_WiiU_PauseWatchdog(0);
+
+	if (!running)
 	{
 		/* HOME menu "close software", or a power down. */
 		wiiu_leaving_foreground = true;
@@ -141,9 +150,9 @@ Sys_Error(const char *error, ...)
 	vsnprintf(string, sizeof(string), error, argptr);
 	va_end(argptr);
 
-	WiiU_Log("Error: ");
-	WiiU_Log(string);
-	WiiU_Log("\n");
+	Sys_WiiU_LogRaw("Error: ");
+	Sys_WiiU_LogRaw(string);
+	Sys_WiiU_LogRaw("\n");
 
 	WiiU_Exit(1);
 }
@@ -151,7 +160,7 @@ Sys_Error(const char *error, ...)
 void
 Sys_Quit(void)
 {
-	WiiU_Log("------------------------------------\n");
+	Sys_WiiU_LogRaw("------------------------------------\n");
 	WiiU_Exit(0);
 }
 
@@ -177,7 +186,8 @@ Sys_ConsoleOutput(char *string)
 		string++;
 	}
 
-	WiiU_Log(string);
+	Sys_WiiU_Heartbeat();
+	Sys_WiiU_LogRaw(string);
 }
 
 /* ================================================================ */

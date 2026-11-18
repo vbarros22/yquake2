@@ -50,7 +50,7 @@ jobs:
             cmake --build build-wiiu -- -k 0
           } 2>&1 | tee ci-build.log
           mkdir -p artifacts
-          cp build-wiiu/yquake2.wuhb build-wiiu/yquake2.rpx wiiu/README.md artifacts/
+          cp build-wiiu/yquake2.wuhb build-wiiu/yquake2.rpx build-wiiu/yquake2.elf wiiu/README.md artifacts/
 
       - name: Report failure as annotations
         if: failure()

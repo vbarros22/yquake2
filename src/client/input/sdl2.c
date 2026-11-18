@@ -2690,6 +2690,7 @@ IN_Controller_Init(qboolean notify_user)
 
 #ifdef __WIIU__
 		/* No rumble support in SDL for the Wii U. */
+		Com_Printf("Initializing SDL game controllers...\n");
 		if (SDL_Init(SDL_INIT_GAMECONTROLLER) == -1)
 #else
 		if (SDL_Init(SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC) == -1)
@@ -2955,6 +2956,9 @@ IN_Init(void)
 	Cmd_AddCommand("+gyroaction", IN_GyroActionDown);
 	Cmd_AddCommand("-gyroaction", IN_GyroActionUp);
 
+#ifdef __WIIU__
+	Com_Printf("Starting text input...\n");
+#endif
 	SDL_StartTextInput();
 
 	IN_Controller_Init(false);

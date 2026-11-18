@@ -178,6 +178,7 @@ set(Client-Source
 	${SRC}/client/input/sdl2.c
 	${SRC}/client/vid/glimp_wiiu.c
 	${SRC}/backends/generic/misc.c
+	${SRC}/backends/wiiu/debug.c
 	${SRC}/backends/wiiu/hunk.c
 	${SRC}/backends/wiiu/main.c
 	${SRC}/backends/wiiu/network.c

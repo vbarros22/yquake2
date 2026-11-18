@@ -48,6 +48,7 @@ main(int argc, char **argv)
 	mkdir(WIIU_DATADIR, 0755);
 	chdir(WIIU_DATADIR);
 	Sys_WiiU_OpenLog(WIIU_DATADIR "/yquake2.log");
+	Sys_WiiU_InitDebug();
 
 	/* Keep everything in one folder on the SD card. */
 	is_portable = true;
