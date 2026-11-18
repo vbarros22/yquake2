@@ -1,0 +1,65 @@
+name: Wii U
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+env:
+  DEVKITPRO: /opt/devkitpro
+  DEVKITPPC: /opt/devkitpro/devkitPPC
+  # gx2gl (OpenGL 3.3 on GX2) and CafeGLSL, prebuilt.
+  GX2GL_SDK_URL: https://github.com/vbarros22/gx2gl/releases/download/sdk-v0.1.0-gs/gx2gl-sdk.tar.gz
+
+jobs:
+  wiiu:
+    name: Wii U (.wuhb)
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitppc:latest
+    steps:
+      - name: Install dependencies
+        run: |
+          rm -f /etc/apt/sources.list.d/devkitpro.list
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates curl cmake ninja-build
+          dkp-pacman -Sy --noconfirm --needed wiiu-sdl2
+
+      - uses: actions/checkout@v4
+
+      - name: Download the gx2gl SDK
+        run: |
+          curl -fsSL "$GX2GL_SDK_URL" -o gx2gl-sdk.tar.gz
+          tar xzf gx2gl-sdk.tar.gz
+
+      - name: Build
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            cmake -S wiiu -B build-wiiu -G Ninja \
+              -DCMAKE_TOOLCHAIN_FILE="$DEVKITPRO/cmake/WiiU.cmake" \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DGX2GL_SDK="$PWD/gx2gl-sdk" &&
+            cmake --build build-wiiu
+          } 2>&1 | tee ci-build.log
+          mkdir -p artifacts
+          cp build-wiiu/yquake2.wuhb build-wiiu/yquake2.rpx wiiu/README.md artifacts/
+
+      - name: Report failure as annotations
+        if: failure()
+        shell: bash
+        run: |
+          f=ci-build.log
+          [ -f "$f" ] || exit 0
+          { grep -n -B3 -A8 -E "error|Error |FAILED|undefined reference|multiple definition" "$f" | head -150
+            echo "----- tail -----"; tail -40 "$f"; } > ci-excerpt.txt || true
+          msg=$(sed -e 's/%/%25/g' -e 's/\r/%0D/g' ci-excerpt.txt | awk 'BEGIN{ORS="%0A"} {print}')
+          echo "::error title=$f::$msg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yquake2-wiiu
+          path: artifacts/
+          if-no-files-found: error

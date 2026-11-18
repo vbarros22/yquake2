@@ -50,6 +50,10 @@
 #include <FindDirectory.h>
 #endif
 
+#ifdef __WIIU__
+#include "../wiiu/wiiu.h"
+#endif
+
 #ifndef PATH_MAX
 // this is mostly for windows. windows has a MAX_PATH = 260 #define, but allows
 // longer paths anyway.. this might not be the maximum allowed length, but is
@@ -127,6 +131,9 @@ static void SetExecutablePath(char* exePath)
 
 	// TODO: realpath() ?
 	// TODO: no idea what this is if the executable is in an app bundle
+#elif defined(__WIIU__)
+	// The .rpx/.wuhb may be anywhere; the game data has a fixed place.
+	snprintf(exePath, PATH_MAX, "%s/yquake2.rpx", WIIU_DATADIR);
 #elif defined(__HAIKU__)
 	if (find_path(B_APP_IMAGE_SYMBOL, B_FIND_PATH_IMAGE_PATH, NULL, exePath, PATH_MAX) != B_OK)
 	{

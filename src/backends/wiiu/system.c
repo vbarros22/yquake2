@@ -1,0 +1,472 @@
+/*
+ * Copyright (C) 1997-2001 Id Software, Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or (at
+ * your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+ * 02111-1307, USA.
+ *
+ * =======================================================================
+ *
+ * System specific stuff for the Wii U: time, files, the console log,
+ * the HOME menu, and the game and renderer, which are linked in
+ * statically instead of being loaded as libraries.
+ *
+ * =======================================================================
+ */
+
+#include <dirent.h>
+#include <errno.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include <coreinit/exit.h>
+#include <coreinit/foreground.h>
+#include <coreinit/thread.h>
+#include <coreinit/time.h>
+#include <proc_ui/procui.h>
+#include <sysapp/launch.h>
+#include <whb/log.h>
+#include <whb/proc.h>
+
+#include "../../common/header/common.h"
+#include "../../common/header/glob.h"
+#include "wiiu.h"
+
+/* Entry points of the statically linked game and renderer. Their other
+   symbols are made local at build time, so these are the only names they
+   share with the engine. */
+void *GetGameAPI(void *import);
+void *GetRefAPI(void *import);
+
+qboolean stdin_active = false;
+
+extern FILE *logfile;
+
+char cfgdir[MAX_OSPATH] = CFGDIRNAME;
+
+static FILE *wiiu_log;
+static qboolean wiiu_leaving_foreground;
+
+/* ================================================================ */
+
+void
+Sys_WiiU_OpenLog(const char *path)
+{
+	wiiu_log = fopen(path, "w");
+}
+
+static void
+WiiU_Log(const char *string)
+{
+	WHBLogWrite(string);
+
+	if (wiiu_log)
+	{
+		fputs(string, wiiu_log);
+		fflush(wiiu_log);
+	}
+}
+
+/*
+ * Returns to the Wii U menu. ProcUI has to keep running until it has
+ * released the foreground, so this pumps it before shutting down.
+ */
+static YQ2_ATTR_NORETURN void
+WiiU_Exit(int status)
+{
+	if (!wiiu_leaving_foreground)
+	{
+		SYSLaunchMenu();
+
+		while (WHBProcIsRunning())
+		{
+		}
+	}
+
+#ifndef DEDICATED_ONLY
+	CL_Shutdown();
+#endif
+	Qcommon_Shutdown();
+
+	if (logfile)
+	{
+		fclose(logfile);
+		logfile = NULL;
+	}
+
+	if (wiiu_log)
+	{
+		fclose(wiiu_log);
+		wiiu_log = NULL;
+	}
+
+	WHBProcShutdown();
+	exit(status);
+}
+
+void
+Sys_WiiU_Frame(void)
+{
+	if (!WHBProcIsRunning())
+	{
+		/* HOME menu "close software", or a power down. */
+		wiiu_leaving_foreground = true;
+		WiiU_Exit(0);
+	}
+}
+
+void
+Sys_Error(const char *error, ...)
+{
+	va_list argptr;
+	char string[1024];
+
+	va_start(argptr, error);
+	vsnprintf(string, sizeof(string), error, argptr);
+	va_end(argptr);
+
+	WiiU_Log("Error: ");
+	WiiU_Log(string);
+	WiiU_Log("\n");
+
+	WiiU_Exit(1);
+}
+
+void
+Sys_Quit(void)
+{
+	WiiU_Log("------------------------------------\n");
+	WiiU_Exit(0);
+}
+
+void
+Sys_Init(void)
+{
+}
+
+/* ================================================================ */
+
+char *
+Sys_ConsoleInput(void)
+{
+	return NULL;
+}
+
+void
+Sys_ConsoleOutput(char *string)
+{
+	/* 0x01 and 0x02 mark red and green lines. */
+	if ((string[0] == 0x01) || (string[0] == 0x02))
+	{
+		string++;
+	}
+
+	WiiU_Log(string);
+}
+
+/* ================================================================ */
+
+long long
+Sys_Microseconds(void)
+{
+	static OSTime first;
+	OSTime now = OSGetSystemTime();
+
+	if (first == 0)
+	{
+		/* Set back by 1ms so neither this function nor
+		   Sys_Milliseconds() ever returns 0. */
+		first = now - OSMillisecondsToTicks(1);
+	}
+
+	return (long long)OSTicksToMicroseconds(now - first);
+}
+
+int
+Sys_Milliseconds(void)
+{
+	return (int)(Sys_Microseconds() / 1000ll);
+}
+
+void
+Sys_Nanosleep(int nanosec)
+{
+	OSSleepTicks(OSNanosecondsToTicks(nanosec));
+}
+
+/* ================================================================ */
+
+static char findbase[MAX_OSPATH];
+static char findpath[MAX_OSPATH];
+static char findpattern[MAX_OSPATH];
+static DIR *fdir;
+
+static char *
+WiiU_FindMatch(void)
+{
+	struct dirent *d;
+
+	while ((d = readdir(fdir)) != NULL)
+	{
+		if (!*findpattern || glob_match(findpattern, d->d_name))
+		{
+			if ((strcmp(d->d_name, ".") != 0) && (strcmp(d->d_name, "..") != 0))
+			{
+				Com_sprintf(findpath, sizeof(findpath), "%s/%s", findbase,
+					d->d_name);
+				return findpath;
+			}
+		}
+	}
+
+	return NULL;
+}
+
+char *
+Sys_FindFirst(const char *path, unsigned musthave, unsigned canhave)
+{
+	char *p;
+
+	if (fdir)
+	{
+		Sys_Error("Sys_BeginFind without close");
+	}
+
+	Q_strlcpy(findbase, path, sizeof(findbase));
+
+	if ((p = strrchr(findbase, '/')) != NULL)
+	{
+		*p = 0;
+		Q_strlcpy(findpattern, p + 1, sizeof(findpattern));
+	}
+	else
+	{
+		strcpy(findpattern, "*");
+	}
+
+	if (strcmp(findpattern, "*.*") == 0)
+	{
+		strcpy(findpattern, "*");
+	}
+
+	if ((fdir = opendir(findbase)) == NULL)
+	{
+		return NULL;
+	}
+
+	return WiiU_FindMatch();
+}
+
+char *
+Sys_FindNext(unsigned musthave, unsigned canhave)
+{
+	if (fdir == NULL)
+	{
+		return NULL;
+	}
+
+	return WiiU_FindMatch();
+}
+
+void
+Sys_FindClose(void)
+{
+	if (fdir != NULL)
+	{
+		closedir(fdir);
+	}
+
+	fdir = NULL;
+}
+
+/* ================================================================ */
+
+void
+Sys_UnloadGame(void)
+{
+}
+
+void *
+Sys_GetGameAPI(void *parms)
+{
+	Com_Printf("Using the built-in game.\n");
+	return GetGameAPI(parms);
+}
+
+/* ================================================================ */
+
+void
+Sys_Mkdir(const char *path)
+{
+	char dir[MAX_OSPATH];
+	size_t len;
+
+	/* mkdir() on the Wii U doesn't like a trailing slash. */
+	Q_strlcpy(dir, path, sizeof(dir));
+	len = strlen(dir);
+
+	while (len > 1 && dir[len - 1] == '/')
+	{
+		dir[--len] = '\0';
+	}
+
+	if (!Sys_IsDir(dir))
+	{
+		if (mkdir(dir, 0755) != 0)
+		{
+			Com_Error(ERR_FATAL, "Couldn't create dir %s\n", dir);
+		}
+	}
+}
+
+qboolean
+Sys_IsDir(const char *path)
+{
+	struct stat sb;
+
+	if (stat(path, &sb) != -1)
+	{
+		if (S_ISDIR(sb.st_mode))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+qboolean
+Sys_IsFile(const char *path)
+{
+	struct stat sb;
+
+	if (stat(path, &sb) != -1)
+	{
+		if (S_ISREG(sb.st_mode))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+char *
+Sys_GetHomeDir(void)
+{
+	/* Portable mode: configs and saves live next to the game data. */
+	return NULL;
+}
+
+void
+Sys_Remove(const char *path)
+{
+	if (remove(path) == -1 && errno != ENOENT)
+	{
+		Com_Printf("%s: remove %s: %s\n",
+			__func__, path, strerror(errno));
+	}
+}
+
+int
+Sys_Rename(const char *from, const char *to)
+{
+	return rename(from, to);
+}
+
+void
+Sys_RemoveDir(const char *path)
+{
+	char filepath[MAX_OSPATH];
+	struct dirent *file;
+	DIR *directory;
+
+	if (Sys_IsDir(path))
+	{
+		directory = opendir(path);
+
+		if (directory)
+		{
+			while ((file = readdir(directory)) != NULL)
+			{
+				snprintf(filepath, MAX_OSPATH, "%s/%s", path, file->d_name);
+				Sys_Remove(filepath);
+			}
+
+			closedir(directory);
+			Sys_Remove(path);
+		}
+	}
+}
+
+qboolean
+Sys_Realpath(const char *in, char *out, size_t size)
+{
+	/* The Wii U has no symlinks, and the paths we use are absolute. */
+	Q_strlcpy(out, in, size);
+	return true;
+}
+
+/* ================================================================ */
+
+void *
+Sys_GetProcAddress(void *handle, const char *sym)
+{
+	return NULL;
+}
+
+void
+Sys_FreeLibrary(void *handle)
+{
+}
+
+void *
+Sys_LoadLibrary(const char *path, const char *sym, void **handle)
+{
+	*handle = NULL;
+
+	/* Only the GL3 renderer is linked in. */
+	if (sym && strcmp(sym, "GetRefAPI") == 0)
+	{
+		*handle = (void *)GetRefAPI;
+		return (void *)GetRefAPI;
+	}
+
+	Com_Printf("%s: %s is not available on the Wii U\n", __func__, path);
+	return NULL;
+}
+
+/* ================================================================ */
+
+void
+Sys_GetWorkDir(char *buffer, size_t len)
+{
+	if (getcwd(buffer, len) != 0)
+	{
+		return;
+	}
+
+	buffer[0] = '\0';
+}
+
+qboolean
+Sys_SetWorkDir(char *path)
+{
+	return chdir(path) == 0;
+}

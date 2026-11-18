@@ -320,6 +320,10 @@ VID_GetRendererLibPath(const char *renderer, char *path, size_t len)
 qboolean
 VID_HasRenderer(const char *renderer)
 {
+#ifdef __WIIU__
+	/* The GL3 renderer is linked into the executable. */
+	return strcmp(renderer, "gl3") == 0;
+#else
 	char reflib_path[MAX_OSPATH] = {0};
 	VID_GetRendererLibPath(renderer, reflib_path, sizeof(reflib_path));
 
@@ -329,6 +333,7 @@ VID_HasRenderer(const char *renderer)
 	}
 
 	return false;
+#endif
 }
 
 /*

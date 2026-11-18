@@ -2682,7 +2682,12 @@ IN_Controller_Init(qboolean notify_user)
 		SDL_SetHint( SDL_HINT_GAMECONTROLLER_USE_BUTTON_LABELS, "0" );
 #endif
 
+#ifdef __WIIU__
+		/* No rumble support in SDL for the Wii U. */
+		if (SDL_Init(SDL_INIT_GAMECONTROLLER) == -1)
+#else
 		if (SDL_Init(SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC) == -1)
+#endif
 		{
 			Com_Printf ("Couldn't init SDL Game Controller: %s.\n", SDL_GetError());
 			return;

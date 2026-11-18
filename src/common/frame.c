@@ -25,6 +25,10 @@
  */
 
 #include "header/common.h"
+
+#ifdef __WIIU__
+#include "../backends/wiiu/wiiu.h"
+#endif
 #include <setjmp.h>
 
 cvar_t *developer;
@@ -173,6 +177,11 @@ Qcommon_Mainloop(void)
 	/* The mainloop. The legend. */
 	while (1)
 	{
+#ifdef __WIIU__
+		/* Lets the HOME menu close the game. */
+		Sys_WiiU_Frame();
+#endif
+
 #ifndef DEDICATED_ONLY
 		if (!cl_timedemo->value)
 		{
