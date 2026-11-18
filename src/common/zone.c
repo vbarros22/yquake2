@@ -67,6 +67,12 @@ Z_Free(void *ptr)
 
 	if (z->magic != Z_MAGIC)
 	{
+#ifdef __WIIU__
+		/* Show what overwrote the header. */
+		const unsigned *w = (const unsigned *)z;
+		Com_Printf("Z_Free: header of %p: %08x %08x %08x %08x %08x %08x %08x %08x\n",
+			ptr, w[-4], w[-3], w[-2], w[-1], w[0], w[1], w[2], w[3]);
+#endif
 		Com_Error(ERR_FATAL, "%s: not a valid memory block: %p", __func__, ptr);
 		return;
 	}

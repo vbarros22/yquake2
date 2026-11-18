@@ -259,6 +259,14 @@ Com_Error(int code, const char *fmt, ...)
 	vsnprintf(msg, MAXPRINTMSG, fmt, argptr);
 	va_end(argptr);
 
+#ifdef __WIIU__
+	/* Shutting down may crash on whatever caused this, so log it first. */
+	if (code != ERR_DISCONNECT)
+	{
+		Com_Printf("Com_Error(%d): %s\n", code, msg);
+	}
+#endif
+
 	if (code == ERR_DISCONNECT)
 	{
 #ifndef DEDICATED_ONLY

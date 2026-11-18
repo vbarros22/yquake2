@@ -102,6 +102,17 @@ static const char *crash_what;
 static void
 CrashReport(void)
 {
+	static int reporting;
+
+	/* A crash while reporting one: just stop. */
+	if (reporting++)
+	{
+		while (1)
+		{
+			OSSleepTicks(OSSecondsToTicks(1));
+		}
+	}
+
 	FormatContext(crash_text, sizeof(crash_text), crash_what, &crash_context);
 	Sys_WiiU_LogRaw("\n*** CRASH ***\n");
 	Sys_WiiU_LogRaw(crash_text);
@@ -116,9 +127,14 @@ CrashHandler(OSContext *ctx, const char *what)
 	memcpy(&crash_context, ctx, sizeof(crash_context));
 	crash_what = what;
 
-	/* Resume the thread in CrashReport(), below its current frame. */
+	/* Resume the thread in CrashReport(), on a fresh frame below the
+	   current one. Its back chain is zero, so OSFatal()'s backtrace
+	   stops there instead of following garbage. */
 	ctx->srr0 = (uint32_t)CrashReport;
-	ctx->gpr[1] -= 256;
+	ctx->gpr[1] = (ctx->gpr[1] - 512) & ~15u;
+	((uint32_t *)ctx->gpr[1])[0] = 0;
+	((uint32_t *)ctx->gpr[1])[1] = 0;
+	ctx->lr = 0;
 	return TRUE;
 }
 
