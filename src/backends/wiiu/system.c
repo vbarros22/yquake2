@@ -94,22 +94,12 @@ Sys_WiiU_LogRaw(const char *string)
 }
 
 /*
- * Returns to the Wii U menu. ProcUI has to keep running until it has
- * released the foreground, so this pumps it before shutting down.
+ * Shuts down and returns to the Wii U menu.
  */
 static YQ2_ATTR_NORETURN void
 WiiU_Exit(int status)
 {
 	Sys_WiiU_PauseWatchdog(1);
-
-	if (!wiiu_leaving_foreground)
-	{
-		SYSLaunchMenu();
-
-		while (WHBProcIsRunning())
-		{
-		}
-	}
 
 #ifndef DEDICATED_ONLY
 	CL_Shutdown();
@@ -124,8 +114,23 @@ WiiU_Exit(int status)
 
 	if (wiiu_log)
 	{
+		Sys_WiiU_SyncLog();
 		fclose(wiiu_log);
 		wiiu_log = NULL;
+	}
+
+	if (!wiiu_leaving_foreground)
+	{
+		/* Quitting from the game's menu or an error: ask for the Wii U
+		   menu and run ProcUI until it has released the foreground. The
+		   renderer is gone, so drop WHBGfx's callbacks, they would wait
+		   on the GPU that has been shut down. */
+		ProcUIClearCallbacks();
+		SYSLaunchMenu();
+
+		while (WHBProcIsRunning())
+		{
+		}
 	}
 
 	WHBProcShutdown();
@@ -344,6 +349,21 @@ Sys_Mkdir(const char *path)
 	while (len > 1 && dir[len - 1] == '/')
 	{
 		dir[--len] = '\0';
+	}
+
+	/* FS_CreatePath() walks the whole path. "fs:", "fs:/vol" and
+	   "fs:/vol/external01" can't be created (or stat()ed), and exist. */
+	{
+		static const char datadir_path[] = WIIU_DATADIR;
+		size_t dirlen = strlen(dir);
+
+		if (strchr(dir, '/') == NULL ||
+		    (dirlen < sizeof(datadir_path) &&
+		     strncmp(datadir_path, dir, dirlen) == 0 &&
+		     (datadir_path[dirlen] == '/' || datadir_path[dirlen] == '\0')))
+		{
+			return;
+		}
 	}
 
 	if (!Sys_IsDir(dir))
