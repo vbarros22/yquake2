@@ -24,7 +24,12 @@ jobs:
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             ca-certificates curl cmake ninja-build
-          dkp-pacman -Sy --noconfirm --needed wiiu-sdl2
+          # The devkitPro package mirror is sometimes slow to answer.
+          for i in 1 2 3 4 5; do
+            dkp-pacman -Sy --noconfirm --needed wiiu-sdl2 && break
+            sleep 20
+          done
+          dkp-pacman -Q wiiu-sdl2
 
       - uses: actions/checkout@v4
 
