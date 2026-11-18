@@ -51,6 +51,7 @@
 #endif
 
 #ifdef __WIIU__
+#include <unistd.h> // getcwd()
 #include "../wiiu/wiiu.h"
 #endif
 

@@ -42,7 +42,7 @@ jobs:
               -DCMAKE_TOOLCHAIN_FILE="$DEVKITPRO/cmake/WiiU.cmake" \
               -DCMAKE_BUILD_TYPE=Release \
               -DGX2GL_SDK="$PWD/gx2gl-sdk" &&
-            cmake --build build-wiiu
+            cmake --build build-wiiu -- -k 0
           } 2>&1 | tee ci-build.log
           mkdir -p artifacts
           cp build-wiiu/yquake2.wuhb build-wiiu/yquake2.rpx wiiu/README.md artifacts/
