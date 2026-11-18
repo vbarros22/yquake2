@@ -470,3 +470,26 @@ Sys_SetWorkDir(char *path)
 {
 	return chdir(path) == 0;
 }
+
+/* ================================================================ */
+
+/*
+ * newlib declares basename() in <libgen.h> but wut doesn't provide it.
+ * Like POSIX basename(), but never modifies path.
+ */
+char *
+basename(char *path)
+{
+	static char dot[] = ".";
+	char *slash;
+
+	if (path == NULL || *path == '\0')
+	{
+		return dot;
+	}
+
+	slash = strrchr(path, '/');
+
+	/* "dir/" style paths aren't passed in by the engine. */
+	return (slash && slash[1]) ? slash + 1 : path;
+}
