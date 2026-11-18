@@ -39,6 +39,17 @@ qboolean IsHighDPIaware = false;
 
 void GL3_SwapWindow(void)
 {
+	/* Log the first GL errors: gx2gl reports what it can't do this way. */
+	static int frame, reported;
+	GLenum err;
+
+	while ((err = glGetError()) != GL_NO_ERROR && reported < 40)
+	{
+		Com_Printf("GL error 0x%04x in frame %d\n", err, frame);
+		reported++;
+	}
+
+	frame++;
 	GX2GL_Present();
 }
 
