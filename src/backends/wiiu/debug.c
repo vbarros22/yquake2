@@ -13,8 +13,9 @@
  *  - a watchdog that logs where the main thread is when it hasn't made
  *    progress for a while, so hangs can be located too.
  *
- * Addresses are logged relative to main(): add that offset to the address
- * of main in yquake2.elf (powerpc-eabi-addr2line -e yquake2.elf ...).
+ * Addresses come with the nearest symbol the system knows and their
+ * offset from main(): add that to the address of main in yquake2.elf
+ * (powerpc-eabi-addr2line -e yquake2.elf ...).
  *
  * =======================================================================
  */
@@ -36,53 +37,58 @@ int main(int argc, char **argv);
 static OSThread *main_thread;
 static volatile OSTime last_heartbeat;
 static volatile int watchdog_paused;
-static char crash_text[1024];
+static char crash_text[1536];
 
-static uint32_t
-Rel(uint32_t addr)
-{
-	return addr - (uint32_t)main;
-}
-
+/*
+ * "address name+offset". OSGetSymbolName() knows the system libraries;
+ * for our own code it gives the nearest exported symbol, so the offset
+ * from main() is printed too.
+ */
 static int
-FormatBacktrace(char *out, size_t size, uint32_t sp)
+FormatAddress(char *out, size_t size, uint32_t addr)
 {
-	int len = 0;
+	char name[64];
 
-	/* PowerPC EABI frames: [sp] = back chain, [sp + 4] = saved LR. */
-	for (int i = 0; i < 12 && sp >= 0x10000000 && sp < 0x50000000 && (sp & 3) == 0; i++)
-	{
-		uint32_t *frame = (uint32_t *)sp;
-		uint32_t next = frame[0];
+	name[0] = '\0';
+	OSGetSymbolName(addr, name, sizeof(name));
+	name[40] = '\0';
 
-		if (next <= sp)
-		{
-			break;
-		}
-
-		len += snprintf(out + len, size - len, " %08x", Rel(((uint32_t *)next)[1]));
-
-		if (len >= (int)size)
-		{
-			break;
-		}
-
-		sp = next;
-	}
-
-	return len;
+	return snprintf(out, size, "%08x %s (main%+d)\n", addr, name,
+		(int)(addr - (uint32_t)main));
 }
 
 static void
 FormatContext(char *out, size_t size, const char *what, OSContext *ctx)
 {
-	int len = snprintf(out, size,
-		"%s\npc %08x  lr %08x  (relative to main)\ndar %08x  sp %08x\nbacktrace:",
-		what, Rel(ctx->srr0), Rel(ctx->lr), ctx->dar, ctx->gpr[1]);
+	int len = snprintf(out, size, "%s\ndar %08x  sp %08x  main %08x\npc ",
+		what, ctx->dar, ctx->gpr[1], (uint32_t)main);
+	uint32_t sp = ctx->gpr[1];
 
-	if (len < (int)size)
+	len += FormatAddress(out + len, size - len, ctx->srr0);
+	if (len >= (int)size) return;
+	len += snprintf(out + len, size - len, "lr ");
+	if (len >= (int)size) return;
+	len += FormatAddress(out + len, size - len, ctx->lr);
+
+	/* PowerPC EABI frames: [sp] = back chain, [next + 4] = saved LR. */
+	for (int i = 0; i < 10 && len < (int)size; i++)
 	{
-		FormatBacktrace(out + len, size - len, ctx->gpr[1]);
+		if (sp < 0x10000000 || sp >= 0x50000000 || (sp & 3) != 0)
+		{
+			break;
+		}
+
+		uint32_t next = ((uint32_t *)sp)[0];
+
+		if (next <= sp || next >= 0x50000000)
+		{
+			break;
+		}
+
+		len += snprintf(out + len, size - len, "  ");
+		if (len >= (int)size) return;
+		len += FormatAddress(out + len, size - len, ((uint32_t *)next)[1]);
+		sp = next;
 	}
 }
 
@@ -100,6 +106,7 @@ CrashReport(void)
 	Sys_WiiU_LogRaw("\n*** CRASH ***\n");
 	Sys_WiiU_LogRaw(crash_text);
 	Sys_WiiU_LogRaw("\n");
+	Sys_WiiU_SyncLog();
 	OSFatal(crash_text);
 }
 
@@ -144,6 +151,10 @@ WatchdogThread(int argc, void *argv)
 	{
 		OSSleepTicks(OSSecondsToTicks(1));
 
+		/* Get the log onto the SD card, a crash or power off would
+		   lose what's still cached. */
+		Sys_WiiU_SyncLog();
+
 		if (watchdog_paused)
 		{
 			continue;
@@ -170,7 +181,7 @@ WatchdogThread(int argc, void *argv)
 			OSSleepTicks(OSMillisecondsToTicks(1));
 		}
 
-		char text[512];
+		char text[1024];
 		FormatContext(text, sizeof(text),
 			"*** WATCHDOG: no progress for 8 seconds, main thread is at:",
 			&main_thread->context);
@@ -179,6 +190,7 @@ WatchdogThread(int argc, void *argv)
 		Sys_WiiU_LogRaw("\n");
 		Sys_WiiU_LogRaw(text);
 		Sys_WiiU_LogRaw("\n");
+		Sys_WiiU_SyncLog();
 	}
 
 	return 0;

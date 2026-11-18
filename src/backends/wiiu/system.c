@@ -72,6 +72,16 @@ Sys_WiiU_OpenLog(const char *path)
 }
 
 void
+Sys_WiiU_SyncLog(void)
+{
+	if (wiiu_log)
+	{
+		fflush(wiiu_log);
+		fsync(fileno(wiiu_log));
+	}
+}
+
+void
 Sys_WiiU_LogRaw(const char *string)
 {
 	WHBLogWrite(string);

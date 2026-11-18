@@ -16,6 +16,9 @@ void Sys_WiiU_Frame(void);
 /* Writes to yquake2.log (and the WHB log) without going through Com_Printf. */
 void Sys_WiiU_LogRaw(const char *string);
 
+/* Commits the log to the SD card. */
+void Sys_WiiU_SyncLog(void);
+
 /* Crash handler and hang watchdog, see debug.c. */
 void Sys_WiiU_InitDebug(void);
 void Sys_WiiU_Heartbeat(void);
