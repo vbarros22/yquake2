@@ -9,8 +9,13 @@ on:
 env:
   DEVKITPRO: /opt/devkitpro
   DEVKITPPC: /opt/devkitpro/devkitPPC
-  # gx2gl (OpenGL 3.3 on GX2) and CafeGLSL, prebuilt.
+  # CafeGLSL comes prebuilt from the gx2gl SDK (it takes long to build);
+  # gx2gl itself is built from its branch, so its fixes arrive right away.
   GX2GL_SDK_URL: https://github.com/vbarros22/gx2gl/releases/download/sdk-v0.1.0-gs/gx2gl-sdk.tar.gz
+  GX2GL_REPOSITORY: vbarros22/gx2gl
+  GX2GL_REF: geometry-shaders
+  CAFEGLSL_REPOSITORY: vbarros22/CafeGLSL
+  CAFEGLSL_REF: geometry-shaders
 
 jobs:
   wiiu:
@@ -33,10 +38,38 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - name: Download the gx2gl SDK
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GX2GL_REPOSITORY }}
+          ref: ${{ env.GX2GL_REF }}
+          path: deps/gx2gl
+
+      # Only for CafeGLSLCompiler.h; the library comes from the SDK.
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CAFEGLSL_REPOSITORY }}
+          ref: ${{ env.CAFEGLSL_REF }}
+          path: deps/cafeglsl
+          sparse-checkout: cafecompiler
+
+      - name: Build gx2gl
+        shell: bash
         run: |
+          set -o pipefail
           curl -fsSL "$GX2GL_SDK_URL" -o gx2gl-sdk.tar.gz
           tar xzf gx2gl-sdk.tar.gz
+          mkdir -p deps/cafeglsl/build-cafe/cafecompiler
+          cp gx2gl-sdk/lib/libcafeglsl.a deps/cafeglsl/build-cafe/cafecompiler/
+          {
+            cmake -S deps/gx2gl -B build-gx2gl -G Ninja \
+              -DCMAKE_TOOLCHAIN_FILE="$DEVKITPRO/cmake/WiiU.cmake" \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DGX2GL_CAFEGLSL_ROOT="$PWD/deps/cafeglsl" &&
+            cmake --build build-gx2gl --target gl33_gx2_core
+          } 2>&1 | tee ci-build.log
+          # Same layout as the SDK, with the fresh gx2gl.
+          rm -rf gx2gl-sdk/include && cp -r deps/gx2gl/include gx2gl-sdk/include
+          cp "$(find build-gx2gl -name libgl33_gx2_core.a | head -1)" gx2gl-sdk/lib/
 
       - name: Build
         shell: bash
@@ -48,7 +81,7 @@ jobs:
               -DCMAKE_BUILD_TYPE=Release \
               -DGX2GL_SDK="$PWD/gx2gl-sdk" &&
             cmake --build build-wiiu -- -k 0
-          } 2>&1 | tee ci-build.log
+          } 2>&1 | tee -a ci-build.log
           mkdir -p artifacts
           cp build-wiiu/yquake2.wuhb build-wiiu/yquake2.rpx build-wiiu/yquake2.elf wiiu/README.md artifacts/
 
