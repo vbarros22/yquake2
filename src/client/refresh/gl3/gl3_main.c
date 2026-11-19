@@ -305,12 +305,15 @@ GL3_Register(void)
 	gl_finish = ri.Cvar_Get("gl_finish", "0", CVAR_ARCHIVE);
 	gl_znear = ri.Cvar_Get("gl_znear", "4", CVAR_ARCHIVE);
 
-#ifdef __WIIU__
-	/* gx2gl renders into framebuffer objects upside down, so the
-	   underwater warp (which goes through one) showed the view flipped. */
-	gl3_usefbo = ri.Cvar_Get("gl3_usefbo", "0", CVAR_ARCHIVE);
-#else
 	gl3_usefbo = ri.Cvar_Get("gl3_usefbo", "1", CVAR_ARCHIVE); // use framebuffer object for postprocess effects (water)
+#ifdef __WIIU__
+	/* Earlier Wii U builds turned this off (and saved it in config.cfg)
+	   because the underwater view came out flipped: turn it back on once. */
+	if (ri.Cvar_Get("gl3_wiiu_fbo_fixed", "0", CVAR_ARCHIVE)->value == 0)
+	{
+		ri.Cvar_Set("gl3_usefbo", "1");
+		ri.Cvar_Set("gl3_wiiu_fbo_fixed", "1");
+	}
 #endif
 
 	gl3_show_draw_stats = ri.Cvar_Get("gl3_show_draw_stats", "0", CVAR_ARCHIVE);
@@ -1309,6 +1312,73 @@ GL3_DrawParticles(void)
 #endif
 
 		GL3_UseProgram(gl3state.siParticle.shaderProgram);
+
+#ifdef __WIIU__
+		/* No point sprites in gx2gl: draw each particle as a quad
+		   facing the camera. A point of gl_PointSize = size/(dist*0.1)
+		   pixels is pointSize*10*2*tan(fov_y/2)/height units wide at any
+		   distance. */
+		static part_vtx quads[MAX_PARTICLES * 6];
+		static const float corners[6][2] = {
+			{0, 0}, {1, 0}, {1, 1}, {0, 0}, {1, 1}, {0, 1}
+		};
+		float halfSize = 0.5f * pointSize * 10.0f * 2.0f *
+			tanf(r_newrefdef.fov_y * (float)M_PI / 360.0f) /
+			(float)r_newrefdef.height;
+
+		YQ2_VLAFREE(buf);
+
+		if (numParticles > MAX_PARTICLES)
+		{
+			numParticles = MAX_PARTICLES;
+		}
+
+		for ( i = 0, p = r_newrefdef.particles; i < numParticles; i++, p++ )
+		{
+			GLfloat rgba[4];
+
+			*(int *) color = d_8to24table [ p->color & 0xFF ];
+
+			for(int j=0; j<3; ++j)  rgba[j] = color[j]*(1.0f/255.0f);
+
+			rgba[3] = p->alpha;
+
+			for (int v = 0; v < 6; v++)
+			{
+				part_vtx* cur = &quads[i * 6 + v];
+				float sx = (corners[v][0] * 2.0f - 1.0f) * halfSize;
+				float sy = (corners[v][1] * 2.0f - 1.0f) * halfSize;
+
+				for (int j = 0; j < 3; j++)
+				{
+					cur->pos[j] = p->origin[j] + vright[j] * sx + vup[j] * sy;
+				}
+
+				cur->size = corners[v][0];
+				cur->dist = corners[v][1];
+				memcpy(cur->color, rgba, sizeof(rgba));
+			}
+		}
+
+		glDisable(GL_CULL_FACE);
+		GL3_BindVAO(gl3state.vaoParticle);
+		GL3_BindVBO(gl3state.vboParticle);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(part_vtx)*numParticles*6, quads, GL_STREAM_DRAW);
+		glDrawArrays(GL_TRIANGLES, 0, numParticles * 6);
+		++gl3_num3Ddraws;
+		++gl3_numBufferVtxData;
+
+		glDisable(GL_BLEND);
+		glDepthMask(GL_TRUE);
+		glDisable(GL_PROGRAM_POINT_SIZE);
+
+		if (r_cull->value != 0.0f)
+		{
+			glEnable(GL_CULL_FACE);
+		}
+
+		return;
+#endif
 
 		for ( i = 0, p = r_newrefdef.particles; i < numParticles; i++, p++ )
 		{

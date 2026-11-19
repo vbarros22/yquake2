@@ -422,7 +422,13 @@ GL3_DrawFrameBufferObject(int x, int y, int w, int h, GLuint fboTexture, const f
 		glUniform4fv(shader->uniVblend, 1, v_blend);
 	}
 
+#ifdef __WIIU__
+	/* gx2gl stores what's rendered into a texture top row first, so
+	   its t = 0 is the top of the view instead of the bottom. */
+	drawTexturedRectangleNow(x, y, w, h, 0, 0, 1, 1);
+#else
 	drawTexturedRectangleNow(x, y, w, h, 0, 1, 1, 0);
+#endif
 }
 
 /*
