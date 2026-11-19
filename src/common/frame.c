@@ -403,7 +403,12 @@ Qcommon_Init(int argc, char **argv)
 	cl_timedemo = Cvar_Get("timedemo", "0", 0);
 	dedicated = Cvar_Get("dedicated", "0", CVAR_NOSET);
 	vid_maxfps = Cvar_Get("vid_maxfps", "300", CVAR_ARCHIVE);
+	#ifdef __WIIU__
+	/* 2: measure every frame, but only print the slow ones. */
+	host_speeds = Cvar_Get("host_speeds", "2", 0);
+#else
 	host_speeds = Cvar_Get("host_speeds", "0", 0);
+#endif
 	log_stats = Cvar_Get("log_stats", "0", 0);
 	showtrace = Cvar_Get("showtrace", "0", 0);
 #else
@@ -739,7 +744,27 @@ Qcommon_Frame(int usec)
 		rf = time_after_ref - time_before_ref;
 		sv -= gm;
 		cl -= rf;
-		Com_Printf("all:%3i sv:%3i gm:%3i cl:%3i rf:%3i\n", all, sv, gm, cl, rf);
+		if (host_speeds->value != 2)
+		{
+			Com_Printf("all:%3i sv:%3i gm:%3i cl:%3i rf:%3i\n", all, sv, gm, cl, rf);
+		}
+		else if (all >= 40)
+		{
+			/* Only into the log, not the console. */
+			static int slow;
+
+			if (slow < 3000)
+			{
+				char line[128];
+
+				snprintf(line, sizeof(line), "slow frame: all:%3i sv:%3i gm:%3i cl:%3i rf:%3i\n",
+					all, sv, gm, cl, rf);
+#ifdef __WIIU__
+				Sys_WiiU_LogRaw(line);
+#endif
+				slow++;
+			}
+		}
 	}
 
 

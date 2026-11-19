@@ -27,6 +27,7 @@
  * =======================================================================
  */
 
+#include <coreinit/time.h>
 #include "header/local.h"
 
 #include <gx2gl/present.h>
@@ -34,13 +35,15 @@
 #include <whb/gfx.h>
 
 static GX2GL_Context context = NULL;
+void Sys_WiiU_LogRaw(const char *string); /* backends/wiiu */
+
 static qboolean vsyncActive = false;
 qboolean IsHighDPIaware = false;
 
 void GL3_SwapWindow(void)
 {
 	/* Log the first GL errors: gx2gl reports what it can't do this way. */
-	static int frame, reported;
+	static int frame, reported, reported_slow;
 	GLenum err;
 
 	while ((err = glGetError()) != GL_NO_ERROR && reported < 40)
@@ -50,7 +53,20 @@ void GL3_SwapWindow(void)
 	}
 
 	frame++;
+
+	/* Waiting for the GPU (and vsync) happens here: log when it's long. */
+	OSTime start = OSGetTime();
 	GX2GL_Present();
+	int ms = (int)OSTicksToMilliseconds(OSGetTime() - start);
+
+	if (ms >= 30 && reported_slow < 3000)
+	{
+		/* Into the log only: the console would show it on screen. */
+		char line[64];
+		snprintf(line, sizeof(line), "slow present: %i ms (frame %d)\n", ms, frame);
+		Sys_WiiU_LogRaw(line);
+		reported_slow++;
+	}
 }
 
 qboolean GL3_IsVsyncActive(void)
