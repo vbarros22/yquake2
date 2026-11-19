@@ -240,13 +240,11 @@ void Qcommon_ExecConfigs(qboolean gameStartUp)
 		"bind BTN_NORTH invuse\n"
 		"bind SHOULDR_RIGHT weapnext\n"
 		"bind SHOULDR_LEFT weapprev\n"
-		/* Debugging the port for now: the D-pad toggles renderer
-		   settings and - takes a screenshot. */
-		"bind DP_UP \"toggle r_fullbright; r_fullbright\"\n"
-		"bind DP_DOWN \"toggle r_lightmap; r_lightmap\"\n"
-		"bind DP_LEFT \"toggle gl_texturemode GL_LINEAR_MIPMAP_NEAREST GL_LINEAR GL_NEAREST; gl_texturemode\"\n"
-		"bind DP_RIGHT \"toggle gl3_usefbo; gl3_usefbo\"\n"
-		"bind BTN_BACK screenshot\n"
+		"bind DP_LEFT invprev\n"
+		"bind DP_RIGHT invnext\n"
+		"bind DP_UP \"cmd help\"\n"
+		"bind DP_DOWN invdrop\n"
+		"bind BTN_BACK \"cmd help\"\n"
 		"bind STICK_RIGHT centerview\n");
 #endif
 	Cbuf_AddText("exec config.cfg\n");

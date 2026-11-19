@@ -305,7 +305,13 @@ GL3_Register(void)
 	gl_finish = ri.Cvar_Get("gl_finish", "0", CVAR_ARCHIVE);
 	gl_znear = ri.Cvar_Get("gl_znear", "4", CVAR_ARCHIVE);
 
+#ifdef __WIIU__
+	/* gx2gl renders into framebuffer objects upside down, so the
+	   underwater warp (which goes through one) showed the view flipped. */
+	gl3_usefbo = ri.Cvar_Get("gl3_usefbo", "0", CVAR_ARCHIVE);
+#else
 	gl3_usefbo = ri.Cvar_Get("gl3_usefbo", "1", CVAR_ARCHIVE); // use framebuffer object for postprocess effects (water)
+#endif
 
 	gl3_show_draw_stats = ri.Cvar_Get("gl3_show_draw_stats", "0", CVAR_ARCHIVE);
 
