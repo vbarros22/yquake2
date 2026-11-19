@@ -51,6 +51,21 @@ Options → Gamepad, they are saved to `config.cfg`.
 - Network play (single player only)
 - Touch screen and keyboard
 - Stencil shadows (`gl_shadows`) and MSAA
+- Music: the game plays Ogg Vorbis tracks from `baseq2/music/` when they
+  are there; the CD audio of the original release isn't read
+
+Known issues:
+
+- Starting a map can stutter for a moment while its textures are uploaded.
+- Particles are drawn as small camera-facing quads (gx2gl has no point
+  sprites yet), so they can look slightly different from the PC version.
+
+## Reporting problems
+
+Every run writes `sd:/wiiu/apps/yquake2/yquake2.log`. Besides the console
+output it lists slow frames with a breakdown of where the time went, and
+for crashes the faulting address and a backtrace. Attach it to your report,
+along with a photo of the screen if something looks wrong.
 
 ## Building
 

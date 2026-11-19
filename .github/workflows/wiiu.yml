@@ -3,6 +3,7 @@ name: Wii U
 on:
   push:
     branches: ['**']
+    tags: ['wiiu-*']
   pull_request:
   workflow_dispatch:
 
@@ -16,6 +17,9 @@ env:
   GX2GL_REF: geometry-shaders
   CAFEGLSL_REPOSITORY: vbarros22/CafeGLSL
   CAFEGLSL_REF: geometry-shaders
+
+permissions:
+  contents: write   # only the release step on wiiu-* tags writes
 
 jobs:
   wiiu:
@@ -103,3 +107,12 @@ jobs:
           name: yquake2-wiiu
           path: artifacts/
           if-no-files-found: error
+
+      - name: Publish a release for wiiu-* tags
+        if: startsWith(github.ref, 'refs/tags/wiiu-')
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          files: |
+            artifacts/yquake2.wuhb
+            wiiu/README.md
