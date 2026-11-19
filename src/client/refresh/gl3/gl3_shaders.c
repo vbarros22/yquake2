@@ -38,23 +38,52 @@ CompileShader(GLenum shaderType, const char* shaderSrc, const char* shaderSrc2)
 
 #ifdef YQ2_GL3_GLES3
 	const char* version = "#version 300 es\nprecision highp float;\n";
-#elif defined(__WIIU__)
-	/* gx2gl's shader compiler (CafeGLSL) only computes the first
-	   component of a vector pow(): the others came out 0, so everything
-	   drawn with gamma was red. Do it one component at a time. */
-	const char* version = "#version 150\n"
-		"float q2pow(float b, float e) { return pow(b, e); }\n"
-		"vec2 q2pow(vec2 b, vec2 e) { return vec2(pow(b.x, e.x), pow(b.y, e.y)); }\n"
-		"vec3 q2pow(vec3 b, vec3 e) { return vec3(pow(b.x, e.x), pow(b.y, e.y), pow(b.z, e.z)); }\n"
-		"vec4 q2pow(vec4 b, vec4 e) { return vec4(pow(b.x, e.x), pow(b.y, e.y), pow(b.z, e.z), pow(b.w, e.w)); }\n"
-		"#define pow q2pow\n";
 #else // Desktop GL
 	const char* version = "#version 150\n";
 #endif
 	const char* sources[3] = { version, shaderSrc, shaderSrc2 };
 	int numSources = shaderSrc2 != NULL ? 3 : 2;
 
+#ifdef __WIIU__
+	/* The fragment shaders write outColor.rgb and outColor.a separately,
+	   and with gx2gl's shader compiler (CafeGLSL) only the first component
+	   of each partial write reaches the output: everything came out red.
+	   Write the output once, as a whole vec4, from a wrapper main(). */
+	char* wiiuSrc = NULL;
+	static const char outDecl[] = "out vec4 outColor;";
+
+	if (shaderType == GL_FRAGMENT_SHADER &&
+	    (strstr(shaderSrc, outDecl) || (shaderSrc2 && strstr(shaderSrc2, outDecl))))
+	{
+		static const char head[] = "#define main q2main\n";
+		static const char tail[] = "\n#undef main\n"
+			"out vec4 q2FragColor;\n"
+			"void main() { q2main(); q2FragColor = outColor; }\n";
+		const char* body = shaderSrc2 ? shaderSrc2 : "";
+		size_t len = sizeof(head) + strlen(shaderSrc) + 1 + strlen(body) + sizeof(tail);
+
+		wiiuSrc = malloc(len);
+
+		if (wiiuSrc != NULL)
+		{
+			char* p;
+
+			snprintf(wiiuSrc, len, "%s%s\n%s%s", head, shaderSrc, body, tail);
+
+			/* outColor becomes a plain global (same length, padded). */
+			p = strstr(wiiuSrc, outDecl);
+			memcpy(p, "vec4 outColor;    ", sizeof(outDecl) - 1);
+
+			sources[1] = wiiuSrc;
+			numSources = 2;
+		}
+	}
+#endif
+
 	glShaderSource(shader, numSources, sources, NULL);
+#ifdef __WIIU__
+	free(wiiuSrc);
+#endif
 	glCompileShader(shader);
 	GLint status;
 	glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
