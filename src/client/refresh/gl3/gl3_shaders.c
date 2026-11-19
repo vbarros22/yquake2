@@ -44,46 +44,7 @@ CompileShader(GLenum shaderType, const char* shaderSrc, const char* shaderSrc2)
 	const char* sources[3] = { version, shaderSrc, shaderSrc2 };
 	int numSources = shaderSrc2 != NULL ? 3 : 2;
 
-#ifdef __WIIU__
-	/* The fragment shaders write outColor.rgb and outColor.a separately,
-	   and with gx2gl's shader compiler (CafeGLSL) only the first component
-	   of each partial write reaches the output: everything came out red.
-	   Write the output once, as a whole vec4, from a wrapper main(). */
-	char* wiiuSrc = NULL;
-	static const char outDecl[] = "out vec4 outColor;";
-
-	if (shaderType == GL_FRAGMENT_SHADER &&
-	    (strstr(shaderSrc, outDecl) || (shaderSrc2 && strstr(shaderSrc2, outDecl))))
-	{
-		static const char head[] = "#define main q2main\n";
-		static const char tail[] = "\n#undef main\n"
-			"out vec4 q2FragColor;\n"
-			"void main() { q2main(); q2FragColor = outColor; }\n";
-		const char* body = shaderSrc2 ? shaderSrc2 : "";
-		size_t len = sizeof(head) + strlen(shaderSrc) + 1 + strlen(body) + sizeof(tail);
-
-		wiiuSrc = malloc(len);
-
-		if (wiiuSrc != NULL)
-		{
-			char* p;
-
-			snprintf(wiiuSrc, len, "%s%s\n%s%s", head, shaderSrc, body, tail);
-
-			/* outColor becomes a plain global (same length, padded). */
-			p = strstr(wiiuSrc, outDecl);
-			memcpy(p, "vec4 outColor;    ", sizeof(outDecl) - 1);
-
-			sources[1] = wiiuSrc;
-			numSources = 2;
-		}
-	}
-#endif
-
 	glShaderSource(shader, numSources, sources, NULL);
-#ifdef __WIIU__
-	free(wiiuSrc);
-#endif
 	glCompileShader(shader);
 	GLint status;
 	glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
