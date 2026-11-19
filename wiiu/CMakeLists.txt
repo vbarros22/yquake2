@@ -220,4 +220,7 @@ wut_create_rpx(yquake2)
 wut_create_wuhb(yquake2
 	NAME "Yamagi Quake II"
 	SHORTNAME "Quake II"
-	AUTHOR "Yamagi Quake II team, Wii U port by vbarros22")
+	AUTHOR "Yamagi Quake II team, Wii U port by vbarros22"
+	ICON "${CMAKE_CURRENT_SOURCE_DIR}/meta/icon.png"
+	TVSPLASH "${CMAKE_CURRENT_SOURCE_DIR}/meta/tvsplash.png"
+	DRCSPLASH "${CMAKE_CURRENT_SOURCE_DIR}/meta/drcsplash.png")

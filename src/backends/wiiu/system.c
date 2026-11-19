@@ -61,6 +61,9 @@ extern FILE *logfile;
 char cfgdir[MAX_OSPATH] = CFGDIRNAME;
 
 static FILE *wiiu_log;
+static OSTime wiiu_log_start;
+static OSTime wiiu_log_lastflush;
+static qboolean wiiu_log_linestart = true;
 static qboolean wiiu_leaving_foreground;
 
 /* ================================================================ */
@@ -69,6 +72,15 @@ void
 Sys_WiiU_OpenLog(const char *path)
 {
 	wiiu_log = fopen(path, "w");
+
+	if (wiiu_log)
+	{
+		/* Flushing every line to the SD card cost seconds at startup:
+		   flush once a second, and when crashing or hanging. */
+		setvbuf(wiiu_log, NULL, _IOFBF, 64 * 1024);
+	}
+
+	wiiu_log_start = wiiu_log_lastflush = OSGetTime();
 }
 
 void
@@ -88,8 +100,23 @@ Sys_WiiU_LogRaw(const char *string)
 
 	if (wiiu_log)
 	{
-		fputs(string, wiiu_log);
-		fflush(wiiu_log);
+		/* Milliseconds since startup at the start of each line, to
+		   see where the time goes. */
+		while (*string)
+		{
+			const char *nl = strchr(string, '\n');
+			size_t len = nl ? (size_t)(nl - string) + 1 : strlen(string);
+
+			if (wiiu_log_linestart)
+			{
+				fprintf(wiiu_log, "[%6u] ", (unsigned)
+					OSTicksToMilliseconds(OSGetTime() - wiiu_log_start));
+			}
+
+			fwrite(string, 1, len, wiiu_log);
+			wiiu_log_linestart = (nl != NULL);
+			string += len;
+		}
 	}
 }
 
@@ -141,6 +168,12 @@ void
 Sys_WiiU_Frame(void)
 {
 	Sys_WiiU_Heartbeat();
+
+	if (wiiu_log && OSTicksToMilliseconds(OSGetTime() - wiiu_log_lastflush) >= 1000)
+	{
+		fflush(wiiu_log);
+		wiiu_log_lastflush = OSGetTime();
+	}
 
 	/* WHBProcIsRunning() blocks while the HOME menu is open. */
 	Sys_WiiU_PauseWatchdog(1);
