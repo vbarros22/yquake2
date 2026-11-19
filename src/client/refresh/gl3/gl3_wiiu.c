@@ -31,6 +31,7 @@
 #include "header/local.h"
 
 #include <gx2gl/present.h>
+#include <gx2gl/stats.h>
 #include <gx2gl/proc.h>
 #include <whb/gfx.h>
 
@@ -54,18 +55,42 @@ void GL3_SwapWindow(void)
 
 	frame++;
 
-	/* Waiting for the GPU (and vsync) happens here: log when it's long. */
-	OSTime start = OSGetTime();
 	GX2GL_Present();
-	int ms = (int)OSTicksToMilliseconds(OSGetTime() - start);
 
-	if (ms >= 30 && reported_slow < 3000)
+	/* Log what gx2gl did in slow frames (and in one frame every 10 s,
+	   for comparison). */
+	static OSTime last, lastBaseline;
+	OSTime now = OSGetTime();
+	int ms = last ? (int)OSTicksToMilliseconds(now - last) : 0;
+	int baseline = OSTicksToMilliseconds(now - lastBaseline) >= 10000;
+	last = now;
+
+	if ((ms >= 40 || baseline) && reported_slow < 3000)
 	{
-		/* Into the log only: the console would show it on screen. */
-		char line[64];
-		snprintf(line, sizeof(line), "slow present: %i ms (frame %d)\n", ms, frame);
+		GX2GL_FrameStats st;
+		char line[512];
+
+		GX2GL_GetFrameStats(&st);
+		snprintf(line, sizeof(line),
+			"%s frame %d: %d ms | draw %u/%ums buf %u(%uKB)/%ums unif %u/%ums "
+			"bind %u/%ums tex %u/%ums mip %u/%ums shd %u+%u/%ums prog %u/%ums "
+			"clr %u/%ums | gpu wait %ums\n",
+			baseline ? "sample" : "SLOW", frame, ms,
+			st.draws, st.draw_us / 1000, st.buffer_uploads, st.buffer_bytes / 1024,
+			st.buffer_us / 1000, st.uniform_calls, st.uniform_us / 1000,
+			st.texture_binds, st.texture_bind_us / 1000,
+			st.texture_uploads, st.texture_upload_us / 1000,
+			st.mipmap_generations, st.mipmap_us / 1000,
+			st.shader_compiles, st.program_links, st.shader_us / 1000,
+			st.program_switches, st.program_switch_us / 1000,
+			st.clears, st.clear_us / 1000, st.finish_us / 1000);
 		Sys_WiiU_LogRaw(line);
 		reported_slow++;
+
+		if (baseline)
+		{
+			lastBaseline = now;
+		}
 	}
 }
 
