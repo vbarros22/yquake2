@@ -1480,6 +1480,137 @@ FILE *Q_fopen(const char *file, const char *mode)
 
 	return NULL;
 }
+#elif defined(__WIIU__)
+#include <sys/stat.h>
+#include <errno.h>
+/*
+ * On the Wii U every file system call is a round trip to the I/O
+ * processor, a few milliseconds each on the SD card. The engine looks up
+ * many files that don't exist (every image format for each texture, in
+ * each search path), so remember the paths that weren't there until
+ * something writes a file. Files are also read with a bigger buffer:
+ * newlib's default of 1 KB means a call per kilobyte.
+ */
+#define WIIU_MISSING_SLOTS 8192
+static char *wiiu_missing[WIIU_MISSING_SLOTS];
+static int wiiu_missing_count;
+
+static unsigned
+WiiU_PathHash(const char *path)
+{
+	unsigned h = 2166136261u;
+
+	while (*path)
+	{
+		h = (h ^ (unsigned char)*path++) * 16777619u;
+	}
+
+	return h;
+}
+
+void
+Q_FileCacheInvalidate(void)
+{
+	for (int i = 0; i < WIIU_MISSING_SLOTS; i++)
+	{
+		free(wiiu_missing[i]);
+		wiiu_missing[i] = NULL;
+	}
+
+	wiiu_missing_count = 0;
+}
+
+static qboolean
+WiiU_KnownMissing(const char *path)
+{
+	unsigned i = WiiU_PathHash(path) % WIIU_MISSING_SLOTS;
+
+	while (wiiu_missing[i])
+	{
+		if (!strcmp(wiiu_missing[i], path))
+		{
+			return true;
+		}
+
+		i = (i + 1) % WIIU_MISSING_SLOTS;
+	}
+
+	return false;
+}
+
+static void
+WiiU_AddMissing(const char *path)
+{
+	unsigned i;
+
+	/* Keep the table at most 3/4 full; start over when it's there. */
+	if (wiiu_missing_count >= WIIU_MISSING_SLOTS * 3 / 4)
+	{
+		Q_FileCacheInvalidate();
+	}
+
+	i = WiiU_PathHash(path) % WIIU_MISSING_SLOTS;
+
+	while (wiiu_missing[i])
+	{
+		i = (i + 1) % WIIU_MISSING_SLOTS;
+	}
+
+	wiiu_missing[i] = strdup(path);
+
+	if (wiiu_missing[i])
+	{
+		wiiu_missing_count++;
+	}
+}
+
+FILE *Q_fopen(const char *file, const char *mode)
+{
+	struct stat statbuf;
+	qboolean reading = strchr(mode, 'r') && !strchr(mode, '+');
+	FILE *f;
+
+	/* Savegames are written by the game module, whose own copy of this
+	   function doesn't tell ours: never cache them. */
+	qboolean cacheable = reading && strstr(file, "/save/") == NULL;
+
+	if (!reading)
+	{
+		/* A new file may appear. */
+		Q_FileCacheInvalidate();
+	}
+	else if (cacheable && WiiU_KnownMissing(file))
+	{
+		errno = ENOENT;
+		return NULL;
+	}
+
+	int statret = stat(file, &statbuf);
+
+	if (statret == -1 && errno == ENOENT && reading)
+	{
+		if (cacheable)
+		{
+			WiiU_AddMissing(file);
+		}
+		errno = ENOENT;
+		return NULL;
+	}
+
+	if((statret == -1 && errno != ENOENT) || (statret == 0 && (statbuf.st_mode & S_IFREG) == 0))
+	{
+		return NULL;
+	}
+
+	f = fopen(file, mode);
+
+	if (f && reading)
+	{
+		setvbuf(f, NULL, _IOFBF, 64 * 1024);
+	}
+
+	return f;
+}
 #else
 #include <sys/stat.h>
 #include <errno.h>

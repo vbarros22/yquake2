@@ -56,6 +56,9 @@ typedef struct
 	fsMode_t mode;
 	FILE *file;           /* Only one will be used. */
 	unzFile *zip;        /* (file or zip) */
+#ifdef __WIIU__
+	struct fsPack_s *sharedPack; /* file is that pack's own handle */
+#endif
 } fsHandle_t;
 
 typedef struct fsLink_s
@@ -73,11 +76,14 @@ typedef struct
 	int offset;     /* Ignored in PK3 files. */
 } fsPackFile_t;
 
-typedef struct
+typedef struct fsPack_s
 {
 	char name[MAX_OSPATH];
 	int numFiles;
 	FILE *pak;
+#ifdef __WIIU__
+	qboolean pakInUse; /* pak is lent to an open file */
+#endif
 	unzFile *pk3;
 	qboolean isProtectedPak;
 	fsPackFile_t *files;
@@ -354,6 +360,14 @@ FS_FCloseFile(fileHandle_t f)
 
 	handle = FS_GetFileByHandle(f);
 
+#ifdef __WIIU__
+	if (handle->sharedPack)
+	{
+		/* The pack keeps its handle open. */
+		handle->sharedPack->pakInUse = false;
+	}
+	else
+#endif
 	if (handle->file)
 	{
 		fclose(handle->file);
@@ -547,6 +561,17 @@ FS_FOpenFile(const char *rawname, fileHandle_t *f, qboolean gamedir_only)
 						file_from_protected_pak = true;
 					}
 
+#ifdef __WIIU__
+					/* Opening a file costs milliseconds on the Wii U:
+					   lend out the pack's own handle when it's free. */
+					if (!pack->pakInUse)
+					{
+						pack->pakInUse = true;
+						handle->file = pack->pak;
+						handle->sharedPack = pack;
+					}
+					else
+#endif
 					handle->file = Q_fopen(pack->name, "rb");
 
 					if (handle->file)

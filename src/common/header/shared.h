@@ -389,6 +389,10 @@ char *Q_strchr0(const char *s, char c);
 
 /* Unicode wrappers that also make sure it's a regular file around fopen(). */
 FILE *Q_fopen(const char *file, const char *mode);
+#ifdef __WIIU__
+/* Forget the files Q_fopen() found missing (after renaming files). */
+void Q_FileCacheInvalidate(void);
+#endif
 
 /* Comparator function for qsort(), compares case-insensitive strings. */
 int Q_sort_stricmp(const void *s1, const void *s2);

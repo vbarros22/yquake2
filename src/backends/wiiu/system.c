@@ -427,6 +427,8 @@ Sys_Remove(const char *path)
 int
 Sys_Rename(const char *from, const char *to)
 {
+	/* "to" exists now: Q_fopen() may remember it as missing. */
+	Q_FileCacheInvalidate();
 	return rename(from, to);
 }
 
