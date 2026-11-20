@@ -364,10 +364,10 @@ GL3_Scrap_Upload(void)
 /*
  * This is also used as an entry point for the generated r_notexture
  */
-gl3image_t *
-GL3_LoadPic(char *name, byte *pic, int width, int realwidth,
-            int height, int realheight, size_t data_size,
-            imagetype_t type, int bits)
+static gl3image_t *
+LoadPic(char *name, byte *pic, int width, int realwidth,
+        int height, int realheight, size_t data_size,
+        imagetype_t type, int bits)
 {
 	gl3image_t *image = NULL;
 	GLuint texNum=0;
@@ -582,6 +582,35 @@ GL3_LoadPic(char *name, byte *pic, int width, int realwidth,
 		}
 	}
 
+	return image;
+}
+
+#ifdef __WIIU__
+#include <coreinit/time.h>
+void Sys_WiiU_LogRaw(const char *string); /* backends/wiiu */
+#endif
+
+gl3image_t *
+GL3_LoadPic(char *name, byte *pic, int width, int realwidth,
+            int height, int realheight, size_t data_size,
+            imagetype_t type, int bits)
+{
+#ifdef __WIIU__
+	/* Log images that take long to load, to see what stalls a map's start. */
+	OSTime start = OSGetTime();
+#endif
+	gl3image_t *image = LoadPic(name, pic, width, realwidth, height,
+	                            realheight, data_size, type, bits);
+#ifdef __WIIU__
+	int ms = (int)OSTicksToMilliseconds(OSGetTime() - start);
+	if (ms >= 10)
+	{
+		char line[256];
+		snprintf(line, sizeof(line), "slow image: %s %dx%d (%d bits, type %d): %d ms\n",
+			name, width, height, bits, (int)type, ms);
+		Sys_WiiU_LogRaw(line);
+	}
+#endif
 	return image;
 }
 

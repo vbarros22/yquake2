@@ -73,13 +73,14 @@ void GL3_SwapWindow(void)
 		GX2GL_GetFrameStats(&st);
 		snprintf(line, sizeof(line),
 			"%s frame %d: %d ms | draw %u/%ums buf %u(%uKB)/%ums unif %u/%ums "
-			"bind %u/%ums tex %u/%ums mip %u/%ums shd %u+%u/%ums prog %u/%ums "
+			"bind %u/%ums tex %u/%ums(alloc %u copy %u) mip %u/%ums shd %u+%u/%ums prog %u/%ums "
 			"clr %u/%ums other %u/%ums | gpu %ums vsync %ums\n",
 			baseline ? "sample" : "SLOW", frame, ms,
 			st.draws, st.draw_us / 1000, st.buffer_uploads, st.buffer_bytes / 1024,
 			st.buffer_us / 1000, st.uniform_calls, st.uniform_us / 1000,
 			st.texture_binds, st.texture_bind_us / 1000,
 			st.texture_uploads, st.texture_upload_us / 1000,
+			st.texture_storage_us / 1000, st.texture_copy_us / 1000,
 			st.mipmap_generations, st.mipmap_us / 1000,
 			st.shader_compiles, st.program_links, st.shader_us / 1000,
 			st.program_switches, st.program_switch_us / 1000,
