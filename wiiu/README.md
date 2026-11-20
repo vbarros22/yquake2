@@ -57,8 +57,6 @@ Options → Gamepad, they are saved to `config.cfg`.
 Known issues:
 
 - Starting a map can stutter for a moment while its textures are uploaded.
-- Particles are drawn as small camera-facing quads (gx2gl has no point
-  sprites yet), so they can look slightly different from the PC version.
 
 ## Reporting problems
 

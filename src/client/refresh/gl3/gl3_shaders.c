@@ -841,7 +841,6 @@ static const char* fragmentSrcAliasColor = MULTILINE_STRING(
 		}
 );
 
-#ifndef __WIIU__
 static const char* vertexSrcParticles = MULTILINE_STRING(
 
 		// it gets attributes and uniforms from vertexCommon3D
@@ -885,51 +884,6 @@ static const char* fragmentSrcParticles = MULTILINE_STRING(
 			outColor.a = texel.a; // I think alpha shouldn't be modified by gamma and intensity
 		}
 );
-
-#else
-static const char* vertexSrcParticles = MULTILINE_STRING(
-
-		// it gets attributes and uniforms from vertexCommon3D
-
-		out vec4 passColor;
-		out vec2 passCoord;
-
-		void main()
-		{
-			// The Wii U has no point sprites: every particle is a quad
-			// facing the camera, and texCoord is the corner (0..1).
-			passColor = vertColor;
-			passCoord = texCoord;
-			gl_Position = transProjView * transModel * vec4(position, 1.0);
-		}
-);
-
-static const char* fragmentSrcParticles = MULTILINE_STRING(
-
-		// it gets attributes and uniforms from fragmentCommon3D
-
-		in vec4 passColor;
-		in vec2 passCoord;
-
-		void main()
-		{
-			vec2 offsetFromCenter = 2.0*(passCoord - vec2(0.5, 0.5)); // normalize so offset is between 0 and 1 instead 0 and 0.5
-			float distSquared = dot(offsetFromCenter, offsetFromCenter);
-			if(distSquared > 1.0) // this makes sure the particle is round
-				discard;
-
-			vec4 texel = passColor;
-
-			outColor.rgb = pow(texel.rgb, vec3(gamma));
-
-			// I want the particles to fade out towards the edge, the following seems to look nice
-			texel.a *= min(1.0, particleFadeFactor*(1.0 - distSquared));
-
-			outColor.a = texel.a; // I think alpha shouldn't be modified by gamma and intensity
-		}
-);
-
-#endif
 
 static const char* fragmentSrcParticlesSquare = MULTILINE_STRING(
 
